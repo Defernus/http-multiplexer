@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -20,7 +21,7 @@ type Request struct {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("{%v} %v\n", r.Method, r.URL.Path)
-	if r.Method == "POST" && r.URL.Path == "/" {
+	if r.Method == http.MethodPost && r.URL.Path == "/" {
 		s.handleRequest(w, r)
 		return
 	}
@@ -35,6 +36,10 @@ type ErrorData struct {
 }
 type Result struct {
 	Responses []string `json:"responses"`
+}
+
+func dialTimeout(network, addr string) (net.Conn, error) {
+	return net.DialTimeout(network, addr, time.Second)
 }
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
@@ -63,12 +68,17 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses := make([]string, len(body.Urls))
+	requests := make([]*http.Request, len(body.Urls))
 
 	resultChan := make(chan []byte)
 	errorChan := make(chan ErrorData)
 
+	transport := http.Transport{
+		Dial: dialTimeout,
+	}
+
 	client := http.Client{
-		Timeout: time.Second,
+		Transport: &transport,
 	}
 
 	go func() {
@@ -77,7 +87,16 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 			go func(i int, url string) {
 				defer wg.Done()
 
-				resp, err := client.Get(url)
+				var err error
+				requests[i], err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+				if err != nil {
+					errorChan <- ErrorData{
+						message:    "Internal server error",
+						statusCode: http.StatusInternalServerError,
+					}
+					return
+				}
+				resp, err := client.Do(requests[i])
 				if err != nil {
 					if os.IsTimeout(err) {
 						errorChan <- ErrorData{
