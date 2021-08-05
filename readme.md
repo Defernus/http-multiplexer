@@ -5,7 +5,7 @@
 docker-compose -f docker-compose.local.yml up
 ```
 
-or try on https://mutiplexer.lavrentev.dev
+or try on https://multiplexer.lavrentev.dev
 
 ## Docs
 
