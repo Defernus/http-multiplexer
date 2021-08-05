@@ -2,7 +2,7 @@
 
 ## TL;DR run
 ```
-docker-compose -f docker-compose.local.yml up
+docker-compose up
 ```
 
 or try on https://multiplexer.lavrentev.dev
